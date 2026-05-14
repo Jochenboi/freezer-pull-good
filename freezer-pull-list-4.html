@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bakery Freezer Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #181c26;
+  --surface2: #1e2333;
+  --border: #2a3045;
+  --border2: #353d55;
+  --text: #e8ecf5;
+  --text2: #8892aa;
+  --text3: #555f78;
+  --accent: #3b82f6;
+  --accent-dim: rgba(59,130,246,0.15);
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.12);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --purple: #a855f7;
+  --radius: 10px;
+  --mono: 'DM Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); font-family: 'DM Sans', sans-serif; color: var(--text); display: flex; flex-direction: column; }
+
+/* SYNC BANNER */
+#sync-banner { font-size: 11px; font-family: var(--mono); text-align: center; padding: 5px; letter-spacing: 0.05em; flex-shrink: 0; transition: background 0.3s; }
+#sync-banner.loading { background: #1e2a3a; color: var(--accent); }
+#sync-banner.live    { background: #0f2a1a; color: var(--green); }
+#sync-banner.saving  { background: #2a1f0a; color: var(--amber); }
+#sync-banner.error   { background: #2a0f0f; color: var(--red); }
+
+/* HEADER */
+.app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; height: 56px; }
+.app-logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.08em; color: var(--text); }
+.app-logo span { color: var(--accent); }
+.date-chip { font-family: var(--mono); font-size: 11px; color: var(--text2); background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; margin-left: auto; }
+
+/* PAGE TABS */
+.page-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tab-btn { flex: 1; padding: 12px 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; border: none; background: none; color: var(--text2); cursor: pointer; position: relative; transition: color 0.2s; letter-spacing: 0.02em; }
+.tab-btn.active { color: var(--accent); }
+.tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 16px; right: 16px; height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
+.tab-btn .tab-icon { display: block; font-size: 16px; margin-bottom: 2px; }
+
+/* PAGES */
+.page { display: none; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.page.active { display: flex; flex-direction: column; }
+
+/* ── PAGE 1: PULL LIST ── */
+.pull-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+.pull-toolbar-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.08em; color: var(--text2); margin-right: 4px; }
+.toolbar-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+.toolbar-btn.danger { border-color: var(--border2); }
+.toolbar-btn.danger:hover { border-color: var(--red); color: var(--red); }
+.toolbar-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+.toolbar-btn.primary:hover { opacity: 0.88; }
+.ml-auto { margin-left: auto; }
+
+.pull-list-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.pull-section-header { padding: 6px 14px 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; }
+
+.pull-item { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface); transition: background 0.15s; }
+.pull-item:hover { background: var(--surface2); }
+.pull-item.status-yes { background: rgba(34,197,94,0.04); }
+.pull-item.status-no  { background: rgba(239,68,68,0.04); opacity: 0.6; }
+.pull-item.dragging { opacity: 0.4; }
+.pull-item.drag-over { border-top: 2px solid var(--accent); }
+
+.item-drag-handle { color: var(--text3); font-size: 14px; cursor: grab; padding: 2px 4px; display: none; touch-action: none; }
+.edit-mode .item-drag-handle { display: block; }
+
+.item-name { flex: 1; font-size: 13px; font-weight: 400; color: var(--text); min-width: 0; }
+.item-name .item-note { display: block; font-size: 10px; color: var(--amber); font-family: var(--mono); margin-top: 1px; }
+.item-par { font-family: var(--mono); font-size: 11px; color: var(--text3); white-space: nowrap; min-width: 52px; text-align: right; }
+
+.pull-qty-input { width: 52px; height: 36px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 15px; font-weight: 500; text-align: center; outline: none; transition: border-color 0.15s; -webkit-appearance: none; inputmode: numeric; }
+.pull-qty-input:focus { border-color: var(--accent); background: var(--accent-dim); }
+.pull-qty-input.has-value { border-color: var(--accent); color: var(--accent); }
+
+.status-btns { display: flex; gap: 4px; }
+.status-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.status-btn.tick { color: var(--text3); }
+.status-btn.tick.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.status-btn.cross { color: var(--text3); }
+.status-btn.cross.active { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+/* Edit mode item controls */
+.edit-item-controls { display: none; gap: 5px; align-items: center; }
+.edit-mode .edit-item-controls { display: flex; }
+.edit-par-input { width: 48px; height: 30px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 12px; text-align: center; outline: none; }
+.edit-par-input:focus { border-color: var(--amber); }
+.delete-item-btn { width: 28px; height: 28px; border-radius: 5px; border: 1px solid var(--border2); background: none; color: var(--text3); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.delete-item-btn:hover { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+/* Add item form */
+.add-item-row { display: none; padding: 12px 14px; background: var(--surface2); border-top: 1px solid var(--border); gap: 8px; align-items: center; flex-shrink: 0; }
+.edit-mode ~ .add-item-row, .add-item-row.visible { display: flex; }
+.add-item-name { flex: 1; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 10px; outline: none; }
+.add-item-name:focus { border-color: var(--accent); }
+.add-item-par { width: 54px; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 8px 8px; outline: none; text-align: center; }
+.add-item-par:focus { border-color: var(--accent); }
+.add-item-note { width: 110px; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 12px; padding: 8px 10px; outline: none; }
+.add-item-note:focus { border-color: var(--amber); }
+.add-item-btn { padding: 8px 14px; background: var(--accent); border: none; border-radius: 6px; color: white; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+
+/* Pull summary bar */
+.pull-summary { display: flex; gap: 8px; padding: 8px 14px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.summary-chip { font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; transition: all 0.15s; -webkit-user-select: none; }
+.summary-chip.grey  { background: var(--surface2); color: var(--text2); border-color: var(--border2); }
+.summary-chip.grey.active { background: var(--text2); color: var(--bg); border-color: var(--text2); }
+.summary-chip.green { background: var(--green-dim); color: var(--green); border-color: transparent; }
+.summary-chip.green.active { background: var(--green); color: var(--bg); }
+.summary-chip.red   { background: var(--red-dim); color: var(--red); border-color: transparent; }
+.summary-chip.red.active { background: var(--red); color: white; }
+.summary-chip.blue  { background: var(--accent-dim); color: var(--accent); border-color: transparent; }
+.summary-chip.blue.active { background: var(--accent); color: white; }
+
+/* Back (undo) button on hidden items */
+.restore-btn { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); background: none; color: var(--text3); cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+.restore-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ── PAGE 2: DATE LIST ── */
+.date-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+.date-toolbar-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.08em; color: var(--text2); }
+.pull-date-input { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; outline: none; }
+.pull-date-input:focus { border-color: var(--accent); }
+
+.date-list-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.date-section-hdr { padding: 6px 14px 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; }
+.shelf-badge { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+
+.date-item { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.date-item:hover { background: var(--surface2); }
+.date-item-expand { cursor: pointer; }
+.date-item-name { flex: 1; font-size: 13px; color: var(--text); min-width: 0; }
+.date-item-note { font-size: 10px; color: var(--amber); font-family: var(--mono); }
+.date-item-qty { font-family: var(--mono); font-size: 12px; color: var(--text2); min-width: 30px; text-align: center; }
+.date-item-expiry { font-family: var(--mono); font-size: 13px; font-weight: 500; white-space: nowrap; padding: 3px 8px; border-radius: 5px; }
+.date-item-expiry.near  { background: var(--amber-dim); color: var(--amber); }
+.date-item-expiry.ok    { background: var(--green-dim); color: var(--green); }
+.date-item-expiry.long  { background: var(--accent-dim); color: var(--accent); }
+.expand-arrow { color: var(--text3); font-size: 11px; transition: transform 0.2s; }
+.expand-arrow.open { transform: rotate(180deg); }
+
+.date-item-photo { display: none; padding: 10px 14px 12px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.date-item-photo.open { display: block; }
+.date-item-photo img { max-width: 200px; max-height: 140px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border2); display: block; }
+.date-item-photo .no-photo { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+/* Edit mode date item */
+.date-edit-controls { display: none; gap: 6px; align-items: center; padding: 8px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.date-edit-controls.open { display: flex; flex-wrap: wrap; }
+.edit-days-input { width: 60px; background: var(--surface); border: 1px solid var(--border2); border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 5px 8px; outline: none; text-align: center; }
+.edit-days-input:focus { border-color: var(--amber); }
+.upload-photo-label { display: flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface); color: var(--text2); font-size: 12px; cursor: pointer; }
+.upload-photo-label:hover { border-color: var(--accent); color: var(--accent); }
+.upload-photo-input { display: none; }
+.save-date-edit-btn { padding: 5px 12px; background: var(--accent); border: none; border-radius: 5px; color: white; font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+
+.empty-date-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; color: var(--text3); text-align: center; gap: 8px; }
+.empty-date-state .icon { font-size: 2.5rem; }
+.empty-date-state p { font-size: 13px; line-height: 1.6; }
+
+/* MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; padding: 20px; border-top: 1px solid var(--border2); }
+.modal h3 { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 0.06em; color: var(--text); margin-bottom: 4px; }
+.modal p { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+.modal-btn-row { display: flex; gap: 8px; margin-top: 16px; }
+.modal-btn { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; }
+.modal-btn.confirm { background: var(--red); border-color: var(--red); color: white; }
+
+/* hidden items (crossed off) */
+.pull-item.hidden-item { display: none; }
+
+@media (min-width: 600px) {
+  .pull-item { padding: 10px 20px; }
+  .item-name { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div id="sync-banner" class="loading">⏳ Connecting to Firebase…</div>
+
+<div class="app-header">
+  <div class="app-logo">Bakery <span>Freezer</span></div>
+  <div class="date-chip" id="header-date">—</div>
+</div>
+
+<div class="page-tabs">
+  <button class="tab-btn active" onclick="switchPage('pull')" id="tab-pull">
+    <span class="tab-icon">❄️</span>Pull List
+  </button>
+  <button class="tab-btn" onclick="switchPage('date')" id="tab-date">
+    <span class="tab-icon">📅</span>Date Labels
+  </button>
+</div>
+
+<!-- ═══ PAGE 1: PULL LIST ═══ -->
+<div class="page active" id="page-pull">
+  <div class="pull-toolbar">
+    <span class="pull-toolbar-title">Evening Pull</span>
+    <button class="toolbar-btn" onclick="toggleEditMode()" id="edit-toggle-btn">✏️ Edit List</button>
+    <button class="toolbar-btn" onclick="downloadPullList()">⬇️ Download</button>
+    <button class="toolbar-btn danger ml-auto" onclick="confirmClearPull()">🗑 Clear All</button>
+  </div>
+
+  <div class="pull-list-scroll" id="pull-list-scroll">
+    <div id="pull-list-container"></div>
+  </div>
+
+  <div class="add-item-row" id="add-item-row">
+    <input class="add-item-name" id="add-item-name" placeholder="Product name" type="text">
+    <input class="add-item-par" id="add-item-par" placeholder="Par" type="number" inputmode="numeric">
+    <input class="add-item-note" id="add-item-note" placeholder="Note (optional)" type="text">
+    <button class="add-item-btn" onclick="addNewItem()">Add</button>
+  </div>
+
+  <div class="pull-summary" id="pull-summary"></div>
+</div>
+
+<!-- ═══ PAGE 2: DATE LABELS ═══ -->
+<div class="page" id="page-date">
+  <div class="date-toolbar">
+    <span class="date-toolbar-title">Date Labels</span>
+    <label style="font-size:12px;color:var(--text2);white-space:nowrap;">Pull date:</label>
+    <input class="pull-date-input" type="date" id="pull-date-picker">
+    <button class="toolbar-btn primary ml-auto" onclick="generateDateLabels()">⚡ Generate</button>
+    <button class="toolbar-btn" onclick="downloadDateList()">⬇️ Download</button>
+    <button class="toolbar-btn" onclick="toggleDateEditMode()" id="date-edit-btn">✏️ Edit</button>
+  </div>
+  <div class="date-list-scroll" id="date-list-scroll">
+    <div id="date-list-container">
+      <div class="empty-date-state">
+        <div class="icon">📅</div>
+        <p>Fill in the pull list tonight,<br>then tap <strong>⚡ Generate</strong> in the morning<br>to see all expiry dates.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="modal-title">Confirm</h3>
+    <p id="modal-body">Are you sure?</p>
+    <div class="modal-btn-row">
+      <button class="modal-btn" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn confirm" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// ─── FIREBASE ────────────────────────────────────────────────────────────────
+// 🔧 REPLACE WITH YOUR OWN FIREBASE CONFIG:
+const firebaseConfig = {
+  apiKey: "AIzaSyA1_ugE3mNR8KlIxSCqRq8MzsgQAh4SVzs",
+  authDomain: "freezer-pull-40b49.firebaseapp.com",
+  databaseURL: "https://freezer-pull-40b49-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "freezer-pull-40b49",
+  storageBucket: "freezer-pull-40b49.firebasestorage.app",
+  messagingSenderId: "436407782241",
+  appId: "1:436407782241:web:e5ac2e24c369429d4d9320"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const pullRef  = db.ref('bakery/pull');
+const dateRef  = db.ref('bakery/dateLabels');
+const itemsRef = db.ref('bakery/items');
+
+// ─── DEFAULT ITEMS ────────────────────────────────────────────────────────────
+const DEFAULT_ITEMS = [
+  {id:'i001',name:"Whittings Fruit And Nut Loaf 460gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i002',name:"Whittings Date And Apricot 460gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i003',name:"Whittings Light Fruit Cake 480gm",par:"2",note:"",shelfDays:60,photo:""},
+  {id:'i004',name:"Papa Joe's Banana Bread Single 100gm",par:"1",note:"",shelfDays:14,photo:""},
+  {id:'i005',name:"Papa Joe's Banana Bread 500gm",par:"2",note:"",shelfDays:14,photo:""},
+  {id:'i006',name:"Happy Cake Loaf Carrot",par:"1",note:"",shelfDays:10,photo:""},
+  {id:'i007',name:"Noshu Iced Carrot Cake 180gm",par:"2",note:"",shelfDays:15,photo:""},
+  {id:'i008',name:"Noshu Fudgy Peanut Brownies 190gm",par:"2",note:"",shelfDays:20,photo:""},
+  {id:'i009',name:"Baker's Oven Lemon Iced Madeira Cake 315gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i010',name:"Baker's Oven Madeira Cake 500gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i011',name:"Greens Lamington Triple Chocolate 4pk",par:"1",note:"",shelfDays:16,photo:""},
+  {id:'i012',name:"Greens Lamington Strawberry And Cream 4pk",par:"1",note:"",shelfDays:16,photo:""},
+  {id:'i013',name:"Baker's Oven Lamington Fingers 350gm",par:"4",note:"",shelfDays:21,photo:""},
+  {id:'i014',name:"Baker's Oven Lamington Jam 350gm",par:"4",note:"",shelfDays:21,photo:""},
+  {id:'i015',name:"Baker's Oven Lamington Cream 350gm",par:"4",note:"",shelfDays:28,photo:""},
+  {id:'i016',name:"Baker's Oven Rollette Choc 250gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i017',name:"Baker's Oven Sponge Roll Choc 400gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i018',name:"Cadbury Rolls Mini Rasp 5pk",par:"2",note:"",shelfDays:63,photo:""},
+  {id:'i019',name:"Cadbury Rolls Mini Choc 5pk",par:"2",note:"",shelfDays:49,photo:""},
+  {id:'i020',name:"Comm Co Double Choc Muffin Gluten Free 160gm",par:"2",note:"",shelfDays:10,photo:""},
+  {id:'i021',name:"Baker's Oven Rollette Jam 250gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i022',name:"Baker's Oven Roll Jam 400gm",par:"2",note:"",shelfDays:21,photo:""},
+  {id:'i023',name:"Mr Kipling Angel Slice 6pk",par:"2",note:"",shelfDays:24,photo:""},
+  {id:'i024',name:"Mr Kipling Lemon Slice 6pk",par:"2",note:"",shelfDays:24,photo:""},
+  {id:'i025',name:"Comm Co Brownies Gluten Free 180gm",par:"2",note:"",shelfDays:14,photo:""},
+  {id:'i026',name:"Comm Co Caramel Slice Gluten Free 180gm",par:"2",note:"",shelfDays:14,photo:""},
+  {id:'i027',name:"Happy Muffin Co Choc Chip 4pk",par:"1",note:"",shelfDays:7,photo:""},
+  {id:'i028',name:"Happy Muffin Co Blueberry 4pk",par:"1",note:"",shelfDays:7,photo:""},
+  {id:'i029',name:"Happy Muffin Co Double Choc Chip Mini 8pk",par:"2",note:"",shelfDays:7,photo:""},
+  {id:'i030',name:"Happy Muffin Co Choc Chip Mini 8pk",par:"2",note:"",shelfDays:7,photo:""},
+  {id:'i031',name:"Happy Muffin Co Blueberry 8pk",par:"1",note:"",shelfDays:7,photo:""},
+  {id:'i032',name:"Country Chef Pavlova 500gm",par:"1",note:"",shelfDays:35,photo:""},
+  {id:'i033',name:"Comm Co Mud Cake Choc",par:"1",note:"",shelfDays:14,photo:""},
+  {id:'i034',name:"Country Chef Cupcake Red Velvet 4pk 240gm",par:"1",note:"",shelfDays:9,photo:""},
+  {id:'i035',name:"Country Chef Cupcake Choc 4pk 288gm",par:"1",note:"",shelfDays:9,photo:""},
+  {id:'i036',name:"Comm Co Fruit Slice Loaf Gluten Free 585gm",par:"1",note:"",shelfDays:10,photo:""},
+  {id:'i037',name:"Marcel's Pancake Happy 6pk 240gm",par:"2",note:"",shelfDays:5,photo:""},
+  {id:'i038',name:"Marcel's Pancake Happy Petit 24pk 200gm",par:"1",note:"",shelfDays:5,photo:""},
+  {id:'i039',name:"Marcel's Buttermilk Pikelets 200gm",par:"2",note:"",shelfDays:5,photo:""},
+  {id:'i040',name:"This Sourdough Co Crumpets 260gm",par:"1",note:"",shelfDays:3,photo:""},
+  {id:'i041',name:"New York Bagel 4pk",par:"2",note:"",shelfDays:8,photo:""},
+  {id:'i042',name:"Glick's Bagel Everything 4pk 360gm",par:"2",note:"",shelfDays:8,photo:""},
+  {id:'i043',name:"Glick's Bagel Plain 4pk 360gm",par:"2",note:"",shelfDays:8,photo:""},
+  {id:'i044',name:"Glick's Bagel Sesame 4pk 360gm",par:"2",note:"",shelfDays:8,photo:""},
+  {id:'i045',name:"Comm Co English Muffin G/F 390gm",par:"1",note:"",shelfDays:10,photo:""},
+  {id:'i046',name:"This Sourdough Co English Muffins 260gm",par:"1",note:"",shelfDays:3,photo:""},
+  {id:'i047',name:"Toscano Croissants 240gm",par:"6",note:"",shelfDays:21,photo:""},
+  {id:'i048',name:"Baker's Oven Croissants 3pk",par:"2",note:"",shelfDays:5,photo:""},
+  {id:'i049',name:"Mill Lane English Style Waffles 6pk 130gm",par:"2",note:"",shelfDays:41,photo:""},
+  {id:'i050',name:"Wattle Valley Waffle 280gm",par:"6",note:"",shelfDays:28,photo:""},
+  {id:'i051',name:"Toscano Waffles 360gm",par:"6",note:"",shelfDays:35,photo:""},
+  {id:'i052',name:"Toscano Brioche Buns 270gm",par:"Whole Box",note:"",shelfDays:21,photo:""},
+  {id:'i053',name:"Toscano Hot Dog Buns 270gm",par:"6",note:"",shelfDays:21,photo:""},
+  {id:'i054',name:"Toscano Brioche Classic 280gm",par:"4",note:"",shelfDays:21,photo:""},
+  {id:'i055',name:"Bakers Oven Dinner Rolls 6pk",par:"1",note:"Blue",shelfDays:3,photo:""},
+  {id:'i056',name:"Bakery Dujour Brioche Buns 4pk",par:"2",note:"",shelfDays:5,photo:""},
+  {id:'i057',name:"Comm Co Sourdough Baguette",par:"2",note:"Bags above weigh labeller",shelfDays:3,photo:""},
+  {id:'i058',name:"Comm Co Sourdough Rolls 4pk",par:"1",note:"Thaw in the bag",shelfDays:3,photo:""},
+  {id:'i059',name:"Mr Pitta Milk Buns",par:"3",note:"",shelfDays:7,photo:""},
+  {id:'i060',name:"Mill Lane Sourdough White Vienna 680gm",par:"2",note:"",shelfDays:4,photo:""},
+  {id:'i061',name:"Mill Lane Sourdough Multigrain Vienna 680gm",par:"2",note:"",shelfDays:4,photo:""},
+  {id:'i062',name:"Mill Lane Turkish 3pk",par:"6",note:"",shelfDays:5,photo:""},
+  {id:'i063',name:"Mill Lane Ciabatta 3pk",par:"2",note:"",shelfDays:5,photo:""},
+  {id:'i064',name:"Kontos Flatbread Multigrain 5pk 397gm",par:"2",note:"",shelfDays:10,photo:""},
+  {id:'i065',name:"Kontos Pita White 5pk 397gm",par:"2",note:"",shelfDays:10,photo:""},
+  {id:'i066',name:"Mission Souvlaki 320gm",par:"4",note:"",shelfDays:14,photo:""},
+  {id:'i067',name:"Kontos Grilled Panini 255gm",par:"2",note:"",shelfDays:28,photo:""},
+  {id:'i068',name:"Mr Pitta Pita Bread",par:"3",note:"",shelfDays:7,photo:""},
+  {id:'i069',name:"Comm Co Loaf Seeded 585gm",par:"4",note:"",shelfDays:10,photo:""},
+  {id:'i070',name:"Well And Good White Sliced 300gm",par:"2",note:"",shelfDays:18,photo:""},
+  {id:'i071',name:"Well And Good Brioche Buns 225gm",par:"2",note:"",shelfDays:18,photo:""},
+  {id:'i072',name:"Comm Co Chicken Schnitzel 400gm",par:"3",note:"THAW IN FRIDGE",shelfDays:15,photo:""},
+  {id:'i073',name:"Comm Co Butter Chicken 350gm",par:"2",note:"THAW IN FRIDGE",shelfDays:16,photo:""},
+  {id:'i074',name:"Comm Co Chicken Tikka Masala 350gm",par:"2",note:"THAW IN FRIDGE",shelfDays:16,photo:""},
+  {id:'i075',name:"Comm Co Satay Chicken 350gm",par:"2",note:"THAW IN FRIDGE",shelfDays:16,photo:""},
+  {id:'i076',name:"Comm Co Thai Green Curry",par:"2",note:"THAW IN FRIDGE",shelfDays:16,photo:""},
+  {id:'i077',name:"Gerry's Pittes 450gm",par:"Whole Box",note:"THAW IN FRIDGE",shelfDays:21,photo:""},
+  {id:'i078',name:"Solo Tiramisu 200gm",par:"4",note:"THAW IN FRIDGE",shelfDays:40,photo:""},
+  {id:'i079',name:"Comm Co Fruit HCB",par:"1",note:"",shelfDays:3,photo:""},
+  {id:'i080',name:"Comm Co Fruitless HCB",par:"1",note:"",shelfDays:3,photo:""},
+  {id:'i081',name:"Comm Co Choc Chip HCB",par:"1",note:"",shelfDays:3,photo:""},
+  {id:'i082',name:"Yarrows Fruit HCB",par:"1",note:"",shelfDays:5,photo:""},
+  {id:'i083',name:"Yarrows Fruitless HCB",par:"1",note:"",shelfDays:5,photo:""},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let items = [];       // master item list
+let pullData = {};    // { itemId: { qty, status } }
+let dateLabels = [];  // generated date label rows
+let editMode = false;
+let dateEditMode = false;
+let saveTimer = null;
+let isRemote = false;
+let numpadTarget = null;
+let numpadVal = '';
+let modalConfirmFn = null;
+let dragSrcIdx = null;
+let activeFilter = 'all'; // 'all' | 'entered' | 'instock' | 'notstock'
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function setBanner(mode, msg) {
+  const b = document.getElementById('sync-banner');
+  b.className = mode; b.textContent = msg;
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+
+document.getElementById('header-date').textContent = todayStr();
+document.getElementById('pull-date-picker').value = new Date().toISOString().split('T')[0];
+
+// Listen for items
+itemsRef.on('value', snap => {
+  const val = snap.val();
+  if (val && Array.isArray(val)) { items = val; }
+  else if (val && typeof val === 'object') { items = Object.values(val); }
+  else { items = JSON.parse(JSON.stringify(DEFAULT_ITEMS)); itemsRef.set(items); }
+  renderPullList();
+});
+
+// Listen for pull data
+pullRef.on('value', snap => {
+  const val = snap.val();
+  pullData = val || {};
+  // Don't re-render while user is typing in a qty box — it would kill the keyboard
+  const activeEl = document.activeElement;
+  const isTyping = activeEl && activeEl.classList.contains('pull-qty-input');
+  if (!isTyping) renderPullList();
+  setBanner('live', '● Live — syncing across all devices');
+}, err => {
+  setBanner('error', '⚠ Cannot connect to Firebase — check connection');
+});
+
+// Listen for date labels
+dateRef.on('value', snap => {
+  const val = snap.val();
+  dateLabels = val || [];
+  renderDateList();
+});
+
+// ─── SAVE ─────────────────────────────────────────────────────────────────────
+function savePull() {
+  setBanner('saving', '💾 Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    pullRef.set(pullData)
+      .then(() => setBanner('live', '● Live — syncing across all devices'))
+      .catch(() => setBanner('error', '⚠ Save failed'));
+  }, 400);
+}
+
+function saveItems() {
+  itemsRef.set(items).catch(() => setBanner('error', '⚠ Save failed'));
+}
+
+function saveDateLabels() {
+  dateRef.set(dateLabels).catch(() => setBanner('error', '⚠ Save failed'));
+}
+
+// ─── PAGE SWITCH ──────────────────────────────────────────────────────────────
+function switchPage(p) {
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  document.getElementById('tab-' + p).classList.add('active');
+}
+
+// ─── EDIT MODE ────────────────────────────────────────────────────────────────
+function toggleEditMode() {
+  editMode = !editMode;
+  document.getElementById('edit-toggle-btn').textContent = editMode ? '✅ Done' : '✏️ Edit List';
+  document.getElementById('add-item-row').style.display = editMode ? 'flex' : 'none';
+  renderPullList();
+}
+
+// ─── PULL LIST RENDER ─────────────────────────────────────────────────────────
+function renderPullList() {
+  const container = document.getElementById('pull-list-container');
+  container.innerHTML = '';
+  if (!items.length) return;
+
+  let pulled = 0, missing = 0, withQty = 0;
+  items.forEach(item => {
+    const pd = pullData[item.id] || {};
+    if (pd.status === 'yes') pulled++;
+    if (pd.status === 'no') missing++;
+    if (pd.qty) withQty++;
+  });
+
+  items.forEach((item, idx) => {
+    // Section headers
+    if (idx === 0) { container.appendChild(makeSectionHeader('Bakery & Bread Items')); }
+    const fridgeStart = items.findIndex(i => i.note?.includes('THAW IN FRIDGE'));
+    if (idx === fridgeStart && fridgeStart > 0) {
+      container.appendChild(makeSectionHeader('🌡 Thaw In Fridge'));
+    }
+    const hcbStart = items.findIndex(i => i.name?.includes('HCB') || i.name?.includes('Yarrows'));
+    if (idx === hcbStart && hcbStart > 0 && !items[hcbStart-1].name?.includes('HCB') && !items[hcbStart-1].name?.includes('Yarrows')) {
+      container.appendChild(makeSectionHeader('Hot Cross Buns'));
+    }
+
+    const pd = pullData[item.id] || {};
+    const isHidden = pd.status === 'no';
+    const isInStock = pd.status === 'yes';
+    const hasQty = !!pd.qty;
+
+    // Apply filter — in edit mode always show all
+    if (!editMode) {
+      if (activeFilter === 'all' && isHidden) return;
+      if (activeFilter === 'entered' && !hasQty) return;
+      if (activeFilter === 'instock' && !isInStock) return;
+      if (activeFilter === 'notstock' && !isHidden) return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'pull-item' + (isInStock ? ' status-yes' : isHidden ? ' status-no' : '') + (editMode ? ' edit-mode' : '');
+    row.dataset.idx = idx;
+    row.innerHTML = `
+      <span class="item-drag-handle" draggable="true">⠿</span>
+      <span class="item-name">
+        ${item.name}
+        ${item.note && !item.note.includes('THAW IN FRIDGE') ? `<span class="item-note">⚠ ${item.note}</span>` : ''}
+      </span>
+      <span class="item-par">Par: ${item.par}</span>
+      ${editMode ? `
+        <div class="edit-item-controls">
+          <input class="edit-par-input" type="text" value="${item.par}" onchange="updatePar(${idx},this.value)" title="Par level">
+          <button class="delete-item-btn" onclick="deleteItem(${idx})">✕</button>
+        </div>
+      ` : isHidden ? `
+        <button class="restore-btn" onclick="restoreItem('${item.id}')">↩ Restore</button>
+      ` : `
+        <input class="pull-qty-input${pd.qty ? ' has-value' : ''}" type="number" inputmode="numeric" pattern="[0-9]*"
+          value="${pd.qty || ''}" placeholder="—"
+          oninput="saveQty('${item.id}', this.value)"
+          onkeydown="handleQtyKey(event, ${idx})"
+          data-item-idx="${idx}" data-item-id="${item.id}">
+        <div class="status-btns">
+          <button class="status-btn tick${isInStock ? ' active' : ''}" onclick="setStatus('${item.id}','yes',this)">✓</button>
+          <button class="status-btn cross" onclick="hideItem('${item.id}')">✗</button>
+        </div>
+      `}
+    `;
+
+    // Drag events
+    if (editMode) {
+      const handle = row.querySelector('.item-drag-handle');
+      if (handle) {
+        handle.addEventListener('dragstart', e => { dragSrcIdx = idx; row.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        handle.addEventListener('dragend', () => row.classList.remove('dragging'));
+      }
+      row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+      row.addEventListener('drop', e => { e.preventDefault(); row.classList.remove('drag-over'); moveItem(dragSrcIdx, idx); });
+    }
+
+    container.appendChild(row);
+  });
+
+  // Summary chips — tappable filters
+  const summary = document.getElementById('pull-summary');
+  summary.innerHTML = `
+    <span class="summary-chip grey${activeFilter==='all'?' active':''}" onclick="setFilter('all')">All Items</span>
+    <span class="summary-chip blue${activeFilter==='entered'?' active':''}" onclick="setFilter('entered')">📦 ${withQty} Entered</span>
+    <span class="summary-chip green${activeFilter==='instock'?' active':''}" onclick="setFilter('instock')">✓ ${pulled} In Stock</span>
+    <span class="summary-chip red${activeFilter==='notstock'?' active':''}" onclick="setFilter('notstock')">✗ ${missing} Not In Stock</span>
+  `;
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  renderPullList();
+}
+
+function makeSectionHeader(label) {
+  const el = document.createElement('div');
+  el.className = 'pull-section-header';
+  el.textContent = label;
+  return el;
+}
+
+// ─── PULL INTERACTIONS ────────────────────────────────────────────────────────
+function setStatus(itemId, status, btn) {
+  if (!pullData[itemId]) pullData[itemId] = {};
+  pullData[itemId].status = pullData[itemId].status === status ? null : status;
+  savePull();
+  renderPullList();
+}
+
+function updatePar(idx, val) {
+  items[idx].par = val;
+  saveItems();
+}
+
+function deleteItem(idx) {
+  if (!confirm('Remove "' + items[idx].name + '"?')) return;
+  items.splice(idx, 1);
+  saveItems();
+}
+
+function moveItem(from, to) {
+  if (from === to) return;
+  const moved = items.splice(from, 1)[0];
+  items.splice(to, 0, moved);
+  saveItems();
+  renderPullList();
+}
+
+function addNewItem() {
+  const name = document.getElementById('add-item-name').value.trim();
+  const par  = document.getElementById('add-item-par').value.trim() || '1';
+  const note = document.getElementById('add-item-note').value.trim();
+  if (!name) return;
+  const newItem = { id: 'i' + Date.now(), name, par, note, shelfDays: 7, photo: '' };
+  items.push(newItem);
+  saveItems();
+  document.getElementById('add-item-name').value = '';
+  document.getElementById('add-item-par').value = '';
+  document.getElementById('add-item-note').value = '';
+  renderPullList();
+}
+
+function confirmClearPull() {
+  showModal('Clear All Pull Data', 'This will reset all quantities and statuses. Cannot be undone.', () => {
+    pullData = {};
+    savePull();
+    renderPullList();
+  });
+}
+
+// ─── QTY INPUT ────────────────────────────────────────────────────────────────
+function saveQty(itemId, value) {
+  if (!pullData[itemId]) pullData[itemId] = {};
+  pullData[itemId].qty = value;
+  // Update input styling
+  const inputs = document.querySelectorAll('.pull-qty-input');
+  inputs.forEach(inp => {
+    if (inp.value) inp.classList.add('has-value');
+    else inp.classList.remove('has-value');
+  });
+  savePull();
+}
+
+function handleQtyKey(event, idx) {
+  if (event.key === 'Enter' || event.key === 'Next' || event.keyCode === 13) {
+    event.preventDefault();
+    const inputs = Array.from(document.querySelectorAll('.pull-qty-input'));
+    const currentIdx = inputs.findIndex(inp => parseInt(inp.dataset.itemIdx) === idx);
+    if (currentIdx !== -1 && currentIdx + 1 < inputs.length) {
+      // Save current value then move to next — keep keyboard open
+      saveQty(event.target.dataset.itemId, event.target.value);
+      inputs[currentIdx + 1].focus();
+      inputs[currentIdx + 1].select();
+    } else {
+      // Last item — save and close keyboard
+      saveQty(event.target.dataset.itemId, event.target.value);
+      event.target.blur();
+      renderPullList();
+    }
+  }
+}
+
+function restoreItem(itemId) {
+  if (!pullData[itemId]) pullData[itemId] = {};
+  pullData[itemId].status = null;
+  savePull();
+  renderPullList();
+}
+  if (!pullData[itemId]) pullData[itemId] = {};
+  pullData[itemId].status = 'no';
+  savePull();
+  renderPullList();
+}
+
+// ─── DATE LABELS ──────────────────────────────────────────────────────────────
+function generateDateLabels() {
+  const pullDateStr = document.getElementById('pull-date-picker').value;
+  if (!pullDateStr) { alert('Please set a pull date first.'); return; }
+  showModal(
+    '⚠️ Double-Check Dates',
+    'Make sure to double check at least one date before dating any products.',
+    () => _doGenerate(pullDateStr)
+  );
+  // Change confirm button to non-destructive style
+  document.getElementById('modal-confirm-btn').textContent = 'Got it — Generate';
+  document.getElementById('modal-confirm-btn').style.background = 'var(--accent)';
+  document.getElementById('modal-confirm-btn').style.borderColor = 'var(--accent)';
+}
+
+function _doGenerate(pullDateStr) {
+  const [y, m, d] = pullDateStr.split('-').map(Number);
+  const pullDate = new Date(y, m - 1, d);
+
+  const generated = [];
+  items.forEach(item => {
+    const pd = pullData[item.id] || {};
+    if (pd.status === 'yes' && pd.qty && pd.qty !== '' && pd.qty !== '0') {
+      const expiryDate = new Date(pullDate);
+      // +1 because items are pulled at night, thaw overnight, so shelf life starts the morning after pull
+      expiryDate.setDate(expiryDate.getDate() + (item.shelfDays || 0) + 1);
+      generated.push({
+        id: item.id,
+        name: item.name,
+        note: item.note || '',
+        qty: pd.qty,
+        shelfDays: item.shelfDays,
+        expiry: expiryDate.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: '2-digit' }),
+        expiryFull: expiryDate.toISOString().split('T')[0],
+        photo: item.photo || '',
+      });
+    }
+  });
+
+  dateLabels = generated;
+  saveDateLabels();
+  renderDateList();
+  switchPage('date');
+}
+
+function toggleDateEditMode() {
+  dateEditMode = !dateEditMode;
+  document.getElementById('date-edit-btn').textContent = dateEditMode ? '✅ Done' : '✏️ Edit';
+  renderDateList();
+}
+
+function renderDateList() {
+  const container = document.getElementById('date-list-container');
+  container.innerHTML = '';
+  if (!dateLabels.length) {
+    container.innerHTML = `<div class="empty-date-state">
+      <div class="icon">📅</div>
+      <p>Fill in the pull list tonight,<br>then tap <strong>⚡ Generate</strong> in the morning<br>to see all expiry dates.</p>
+    </div>`;
+    return;
+  }
+
+  // Group by shelf days
+  const groups = {};
+  dateLabels.forEach(item => {
+    const key = item.shelfDays;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+
+  const sortedKeys = Object.keys(groups).map(Number).sort((a, b) => a - b);
+  sortedKeys.forEach(days => {
+    const hdr = document.createElement('div');
+    hdr.className = 'date-section-hdr';
+    const color = days <= 5 ? '#ef4444' : days <= 14 ? '#f59e0b' : '#22c55e';
+    hdr.innerHTML = `<span style="color:${color};">⬤</span> ${days} Day Shelf Life`;
+    container.appendChild(hdr);
+
+    groups[days].forEach((item, gi) => {
+      const globalIdx = dateLabels.findIndex(d => d.id === item.id);
+      const daysUntil = (() => {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const exp = new Date(item.expiryFull + 'T00:00:00');
+        return Math.round((exp - today) / 86400000);
+      })();
+      const expiryClass = daysUntil <= 3 ? 'near' : daysUntil <= 10 ? 'ok' : 'long';
+
+      const row = document.createElement('div');
+      row.className = 'date-item date-item-expand';
+      row.innerHTML = `
+        <span class="date-item-name">
+          ${item.name}
+          ${item.note && !item.note.includes('THAW IN FRIDGE') ? `<span class="date-item-note"> ⚠ ${item.note}</span>` : ''}
+          ${item.note?.includes('THAW IN FRIDGE') ? `<span class="date-item-note"> 🌡 FRIDGE</span>` : ''}
+        </span>
+        <span class="date-item-qty">×${item.qty}</span>
+        <span class="date-item-expiry ${expiryClass}">${item.expiry}</span>
+        ${item.photo ? `<span class="expand-arrow" id="arrow-${globalIdx}">▼</span>` : ''}
+      `;
+      row.addEventListener('click', () => {
+        if (item.photo) togglePhotoExpand(globalIdx);
+      });
+      container.appendChild(row);
+
+      // Photo expand
+      const photoDiv = document.createElement('div');
+      photoDiv.className = 'date-item-photo';
+      photoDiv.id = 'photo-expand-' + globalIdx;
+      if (item.photo) {
+        photoDiv.innerHTML = `<img src="${item.photo}" alt="${item.name}">`;
+      } else {
+        photoDiv.innerHTML = `<span class="no-photo">No photo added yet</span>`;
+      }
+      container.appendChild(photoDiv);
+
+      // Edit controls
+      if (dateEditMode) {
+        const editDiv = document.createElement('div');
+        editDiv.className = 'date-edit-controls open';
+        editDiv.innerHTML = `
+          <span style="font-size:12px;color:var(--text2);">Shelf days:</span>
+          <input class="edit-days-input" type="number" value="${item.shelfDays}" min="1"
+            onchange="updateShelfDays('${item.id}', +this.value)">
+          <label class="upload-photo-label">
+            📷 Photo
+            <input class="upload-photo-input" type="file" accept="image/*" onchange="uploadPhoto('${item.id}', this)">
+          </label>
+          ${item.photo ? `<button style="padding:5px 10px;border-radius:5px;border:1px solid var(--red);background:none;color:var(--red);font-size:11px;cursor:pointer;" onclick="removePhoto('${item.id}')">Remove photo</button>` : ''}
+        `;
+        container.appendChild(editDiv);
+      }
+    });
+  });
+}
+
+function togglePhotoExpand(idx) {
+  const el = document.getElementById('photo-expand-' + idx);
+  const arrow = document.getElementById('arrow-' + idx);
+  if (el) { el.classList.toggle('open'); }
+  if (arrow) { arrow.classList.toggle('open'); }
+}
+
+function updateShelfDays(itemId, days) {
+  const item = items.find(i => i.id === itemId);
+  if (item) { item.shelfDays = days; saveItems(); }
+  const dlItem = dateLabels.find(d => d.id === itemId);
+  if (dlItem) { dlItem.shelfDays = days; saveDateLabels(); }
+}
+
+function uploadPhoto(itemId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    const item = items.find(i => i.id === itemId);
+    if (item) { item.photo = dataUrl; saveItems(); }
+    const dlItem = dateLabels.find(d => d.id === itemId);
+    if (dlItem) { dlItem.photo = dataUrl; saveDateLabels(); }
+    renderDateList();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto(itemId) {
+  const item = items.find(i => i.id === itemId);
+  if (item) { item.photo = ''; saveItems(); }
+  const dlItem = dateLabels.find(d => d.id === itemId);
+  if (dlItem) { dlItem.photo = ''; saveDateLabels(); }
+  renderDateList();
+}
+
+// ─── DOWNLOADS ───────────────────────────────────────────────────────────────
+function downloadPullList() {
+  const today = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' });
+  let rows = '';
+  items.forEach(item => {
+    const pd = pullData[item.id] || {};
+    const status = pd.status === 'yes' ? '✓' : pd.status === 'no' ? '✗' : '';
+    const qty = pd.qty || '';
+    rows += `<tr>
+      <td>${item.name}${item.note ? `<br><small style="color:#c47a00;">${item.note}</small>` : ''}</td>
+      <td style="text-align:center;">${item.par}</td>
+      <td style="text-align:center;">${qty}</td>
+      <td style="text-align:center;font-size:16px;">${status}</td>
+    </tr>`;
+  });
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pull List ${today}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;}h2{margin-bottom:4px;}
+  table{width:100%;border-collapse:collapse;}th{background:#222;color:white;padding:6px 8px;text-align:left;}
+  td{padding:5px 8px;border-bottom:1px solid #ddd;}tr:nth-child(even){background:#f9f9f9;}
+  small{font-size:10px;}</style></head><body>
+  <h2>❄️ Bakery Freezer Pull List</h2><p style="color:#666;margin-bottom:12px;">${today}</p>
+  <table><thead><tr><th>Product</th><th>Par</th><th>Pull Qty</th><th>Status</th></tr></thead>
+  <tbody>${rows}</tbody></table></body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pull-list-${today.replace(/\//g,'-')}.html`;
+  a.click();
+}
+
+function downloadDateList() {
+  if (!dateLabels.length) { alert('Generate the date labels first.'); return; }
+  const today = new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' });
+  // Sort by shelf days
+  const sorted = [...dateLabels].sort((a,b) => a.shelfDays - b.shelfDays);
+  let rows = '';
+  sorted.forEach(item => {
+    rows += `<tr>
+      <td>${item.name}${item.note ? `<br><small style="color:#c47a00;">${item.note}</small>` : ''}</td>
+      <td style="text-align:center;">${item.qty}</td>
+      <td style="text-align:center;">${item.shelfDays}</td>
+      <td style="text-align:center;font-weight:bold;">${item.expiry}</td>
+    </tr>`;
+  });
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Date Labels ${today}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;}h2{margin-bottom:4px;}
+  table{width:100%;border-collapse:collapse;}th{background:#222;color:white;padding:6px 8px;text-align:left;}
+  td{padding:5px 8px;border-bottom:1px solid #ddd;}tr:nth-child(even){background:#f9f9f9;}
+  small{font-size:10px;}</style></head><body>
+  <h2>📅 Bakery Date Labels</h2><p style="color:#666;margin-bottom:12px;">Generated: ${today}</p>
+  <table><thead><tr><th>Product</th><th>Qty Pulled</th><th>Shelf Days</th><th>Use By</th></tr></thead>
+  <tbody>${rows}</tbody></table></body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `date-labels-${today.replace(/\//g,'-')}.html`;
+  a.click();
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────────────────
+function showModal(title, body, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  modalConfirmFn = onConfirm;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-confirm-btn').onclick = () => { closeModal(); if (modalConfirmFn) modalConfirmFn(); };
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  // Reset confirm button to default danger style
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.textContent = 'Confirm';
+  btn.style.background = '';
+  btn.style.borderColor = '';
+}
+</script>
+</body>
+</html>
